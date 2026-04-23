@@ -41,7 +41,7 @@ Une carte de capture expose souvent 2+ `/dev/videoN` dont seule une produit des 
 ### Reseau
 
 ```python
-esp32_ip   = "<IP>"   # IP statique de l'ESP32 (doit correspondre au firmware)
+esp32_ip   = "<IP_ESP>"   # IP statique de l'ESP32 (doit correspondre au firmware)
 esp32_port = 4210              # port UDP
 dry_run    = False             # True = pas d'envoi UDP (test pipeline sans ESP32)
 ```
@@ -84,7 +84,7 @@ Voir la doc systemd dans la doc racine -- le script est typiquement lance via `.
 | `fullscreen` | False | Fenetre plein ecran sans overlay des zones (mode prod) |
 | `monitor_index` | None | Index de l'ecran de sortie. None = WM par defaut |
 | `headless` | True | True = aucune fenetre OpenCV (gain CPU, pour prod avec affichage externe) |
-| `esp32_ip` | `192.168.1.50` | IP de l'ESP32 (ou `127.0.0.1` pour test loopback) |
+| `esp32_ip` | `<IP_ESP>` | IP de l'ESP32 (ou `127.0.0.1` pour test loopback) |
 | `esp32_port` | 4210 | Port UDP d'ecoute sur l'ESP32 |
 | `dry_run` | False | True = pas d'envoi UDP (test du pipeline sans ESP32) |
 | `terminal_preview` | True | Affichage ANSI truecolor des 2 chaines dans le terminal |

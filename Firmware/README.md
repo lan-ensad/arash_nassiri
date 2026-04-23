@@ -15,10 +15,10 @@ Remplir les placeholders dans `src/wifi_config.h` avant de flasher :
 #define WIFI_SSID      "ambilight_net"       // SSID du reseau ferme
 #define WIFI_PASSWORD  "mot_de_passe"
 
-#define LOCAL_IP_BYTES    192, 168, 1, 50   // IP statique de l'ESP32
-#define GATEWAY_IP_BYTES  192, 168, 1, 1    // IP du routeur/AP
+#define LOCAL_IP_BYTES    <IP_ESP>          // IP statique de l'ESP32 (format octets : a, b, c, d)
+#define GATEWAY_IP_BYTES  <IP_ROUTEUR>      // IP du routeur/AP (format octets)
 #define SUBNET_BYTES      255, 255, 255, 0
-#define DNS_IP_BYTES      192, 168, 1, 1
+#define DNS_IP_BYTES      <IP_ROUTEUR>      // typiquement = gateway
 
 #define UDP_PORT          4210
 ```

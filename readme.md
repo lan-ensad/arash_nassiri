@@ -170,7 +170,7 @@ systemctl --user stop    ambilight.service
 **Attente WiFi au boot** : si le reseau met du temps a monter, ajouter dans `run.sh` avant le lancement Python :
 
 ```bash
-for i in {1..30}; do ping -c 1 -W 1 192.168.8.1 >/dev/null 2>&1 && break; sleep 1; done
+for i in {1..30}; do ping -c 1 -W 1 <IP_ROUTEUR> >/dev/null 2>&1 && break; sleep 1; done
 ```
 
 ## Reseau WiFi ferme
@@ -183,7 +183,7 @@ PC et ESP32 sur un reseau WiFi dedie (routeur/AP dedie ou hotspot du PC). Aucun 
 
 | Parametre | Valeur | Fichier |
 |---|---|---|
-| IP ESP32 | <IP\> | `script/config.py` + `Firmware/src/wifi_config.h` |
+| IP ESP32 | `<IP_ESP>` | `script/config.py` + `Firmware/src/wifi_config.h` |
 | Hostname ESP32 | `esp_ambilight` | `Firmware/src/wifi_config.h` |
 | Port UDP | `4210` | `Firmware/src/wifi_config.h` |
 | SSID / password | <SSID + PASS\> | `Firmware/src/wifi_config.h` |
