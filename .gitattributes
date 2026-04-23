@@ -1,0 +1,6 @@
+# Exclure les artefacts de fabrication des stats de langage GitHub Linguist.
+# Sans ca, le .nc (G-code CNC) est detecte a tort comme nesC et domine le repo.
+
+kicad/ambilight_kicad/pcb_fab/*.nc  linguist-generated=true
+kicad/ambilight_kicad/pcb_fab/*.mkc linguist-generated=true
+kicad/ambilight_kicad/gerber/**     linguist-generated=true
