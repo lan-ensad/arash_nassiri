@@ -1,0 +1,38 @@
+# --- Network ---
+network.md
+Firmware/src/wifi_config.h
+
+# --- Contenu sous copyright ---
+script/data/
+
+# --- Documents administratifs / legaux ---
+_devis/
+
+# --- Artefacts de build / cache ---
+# PlatformIO
+Firmware/.pio/
+Firmware/.cache/
+Firmware/compile_commands.json
+Firmware/.vscode/
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+script/.venv/
+
+# KiCad
+kicad/ambilight_kicad/ambilight_kicad-backups/
+kicad/ambilight_kicad/fp-info-cache
+kicad/ambilight_kicad/*.kicad_prl
+kicad/ambilight_kicad/*.lck
+kicad/ambilight_kicad/*-backups/
+kicad/ambilight_kicad/_autosave-*
+
+# --- OS / editeurs ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+.claude/

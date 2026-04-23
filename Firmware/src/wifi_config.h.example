@@ -1,0 +1,21 @@
+#pragma once
+
+// Copier ce fichier en wifi_config.h et remplir avec les vraies valeurs
+// avant flashage. wifi_config.h est gitignore.
+
+// --- Credentials WiFi (reseau ferme ambilight) ---
+#define WIFI_SSID      "YOUR_SSID"
+#define WIFI_PASSWORD  "YOUR_PASSWORD"
+
+// --- Hostname annonce sur le reseau (visible dans les DHCP leases du routeur) ---
+#define WIFI_HOSTNAME  "esp_ambilight"
+
+// --- Port UDP d'ecoute ---
+#define UDP_PORT       4210
+
+// --- Configuration IP statique de l'ESP32 ---
+// Doit correspondre a CFG.esp32_ip dans script/config.py
+#define LOCAL_IP_BYTES    192, 168, 1, 50
+#define GATEWAY_IP_BYTES  192, 168, 1, 1
+#define SUBNET_BYTES      255, 255, 255, 0
+#define DNS_IP_BYTES      192, 168, 1, 1
