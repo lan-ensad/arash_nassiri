@@ -5,6 +5,9 @@ Firmware/src/wifi_config.h
 # --- Contenu sous copyright ---
 script/data/
 
+# --- Logs runtime (service systemd ambilight) ---
+logs/
+
 # --- Documents administratifs / legaux ---
 _devis/
 

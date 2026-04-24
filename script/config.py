@@ -6,8 +6,8 @@ class Config:
     # Priorite : si camera_index est defini, utilise ce flux camera (webcam, carte
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
-    video_path:   str         = "data/sample.mp4"
-    # video_path:   str         = "../test_videos/ambilight_test.mp4"
+    # video_path:   str         = "data/sample.mp4"
+    video_path:   str         = "../test_videos/ambilight_test.mp4"
     camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---

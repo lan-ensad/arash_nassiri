@@ -111,7 +111,22 @@ Pour **tester le pipeline Python sans materiel** (loopback UDP) : voir la sectio
 
 Pour une installation permanente. Recommande quand la source video est externe (Cam Link) et `headless = True` dans `script/config.py` -- aucune session graphique requise.
 
-**1. Creer le service** dans `~/.config/systemd/user/ambilight.service` :
+`run.sh` integre deja l'attente reseau (ping de la passerelle par defaut, max 30 s) et une rotation simple des logs au demarrage : aucune modification requise avant installation.
+
+### Prerequis a verifier dans `script/config.py`
+
+| Parametre | Valeur recommandee | Raison |
+|---|---|---|
+| `headless` | `True` | Pas de session graphique sous systemd user (sauf si `DISPLAY` configure dans l'unit) |
+| `terminal_preview` | `False` | Pas de terminal → les codes ANSI du preview polluent le fichier de log |
+| `dry_run` | `False` | Sinon aucun paquet UDP n'est envoye |
+| `video_path` / `camera_index` | source reelle | `video_path` est resolu relativement a `script/` |
+
+IP ESP32 coherente entre `script/config.py` (`esp32_ip`) et `Firmware/src/wifi_config.h` (`LOCAL_IP_BYTES`).
+
+### 1. Creer le service
+
+Fichier `~/.config/systemd/user/ambilight.service` :
 
 ```ini
 [Unit]
@@ -125,14 +140,21 @@ WorkingDirectory=/path/to/arash_nassiri
 ExecStart=/path/to/arash_nassiri/run.sh
 Restart=on-failure
 RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+# Double destination des logs :
+#  - Fichier persistant (rotation geree par run.sh au demarrage, >10 Mo → archive timestampee, max 5 backups)
+#  - Journal systemd user natif (rotation + compression gerees par journald)
+StandardOutput=append:/path/to/arash_nassiri/logs/ambilight.log
+StandardError=append:/path/to/arash_nassiri/logs/ambilight.log
 
 [Install]
 WantedBy=default.target
 ```
 
-> Adapter `WorkingDirectory` et `ExecStart` au chemin reel du projet.
+> Adapter les 3 chemins `/path/to/arash_nassiri/...` au chemin reel du projet. Le dossier `logs/` est cree automatiquement par `run.sh`.
 
-**2. Activer et demarrer** :
+### 2. Activer et demarrer
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -141,7 +163,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now ambilight.service
 ```
 
-**3. Permettre le demarrage sans login utilisateur** (lingering) :
+### 3. Permettre le demarrage sans login utilisateur (lingering)
 
 ```bash
 sudo loginctl enable-linger $USER
@@ -149,28 +171,41 @@ sudo loginctl enable-linger $USER
 
 Sans cette ligne, le service ne demarre qu'apres connexion interactive.
 
-**4. Verifier / operer** :
+### 4. Prerequis systeme
+
+Utilisateur dans le groupe `video` pour acceder a la capture (Cam Link, webcam) :
 
 ```bash
+sudo usermod -aG video $USER
+# logout/login pour que le groupe prenne effet
+```
+
+### 5. Operer
+
+```bash
+# Etat
 systemctl --user status ambilight.service
-journalctl --user -u ambilight.service -f    # logs live
+
+# Logs temps reel -- deux options equivalentes
+tail -f logs/ambilight.log                          # fichier dedie
+journalctl --user -u ambilight.service -f           # journal systemd
+
+# Logs filtres
+journalctl --user -u ambilight.service -p err       # erreurs uniquement
+journalctl --user -u ambilight.service --since "1 hour ago"
+
+# Cycle de vie
 systemctl --user restart ambilight.service
 systemctl --user stop    ambilight.service
 ```
 
-**Prerequis systeme** :
-- Utilisateur dans le groupe `video` pour acceder a la capture :
-  ```bash
-  sudo usermod -aG video $USER
-  # logout/login pour que le groupe prenne effet
-  ```
-- `dry_run = False` dans `script/config.py`
-- IP ESP32 coherente entre `script/config.py` (`esp32_ip`) et `Firmware/src/wifi_config.h` (`LOCAL_IP_BYTES`)
-
-**Attente WiFi au boot** : si le reseau met du temps a monter, ajouter dans `run.sh` avant le lancement Python :
+### 6. Desinstaller le service
 
 ```bash
-for i in {1..30}; do ping -c 1 -W 1 <IP_ROUTEUR> >/dev/null 2>&1 && break; sleep 1; done
+systemctl --user disable --now ambilight.service
+rm -f ~/.config/systemd/user/ambilight.service
+systemctl --user daemon-reload
+sudo loginctl disable-linger $USER   # optionnel
 ```
 
 ## Reseau WiFi ferme
