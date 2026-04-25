@@ -59,6 +59,12 @@ def _open_source() -> tuple[cv2.VideoCapture, object, bool]:
             print(f"Devices video detectes : {', '.join(devices)}")
         source = CFG.camera_index
         cap    = cv2.VideoCapture(source)
+        # MJPG = format natif Cam Link ; doit etre set AVANT width/height
+        # sinon le pilote peut renegocier en YUYV (latence + bande passante USB).
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        # Buffer minimal cote V4L2 : evite l'accumulation de frames si le script
+        # consomme moins vite que la camera ne produit (cause typique de >1s de retard).
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if CFG.camera_width:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, CFG.camera_width)
         if CFG.camera_height:
@@ -219,7 +225,11 @@ def main() -> None:
                     fps_t0    = now
 
             elapsed = time.perf_counter() - t0
-            time.sleep(max(0.0, delay - elapsed))
+            # Throttle uniquement pour les fichiers (sinon lecture > temps reel).
+            # Sur source live (camera, Cam Link) : consommer des qu'une frame est
+            # prete, pour ne pas accumuler de retard dans les buffers V4L2/ffmpeg.
+            if not live:
+                time.sleep(max(0.0, delay - elapsed))
 
     except KeyboardInterrupt:
         pass

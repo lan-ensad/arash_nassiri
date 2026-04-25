@@ -7,13 +7,13 @@ class Config:
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
     # video_path:   str         = "data/sample.mp4"
-    video_path:   str         = "../test_videos/ambilight_test.mp4"
-    camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
+    # video_path:   str         = "../test_videos/ambilight_test.mp4"
+    camera_index: int | None  = 1   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
-    camera_width:  int   | None = None   # None = resolution native de la camera
-    camera_height: int   | None = None
-    camera_fps:    float | None = None   # None = fps natif, sinon tentative de set
+    camera_width:  int   | None = 1920   # None = resolution native de la camera
+    camera_height: int   | None = 1080
+    camera_fps:    float | None = 30   # None = fps natif, sinon tentative de set
 
     # --- lecture ---
     target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
@@ -27,7 +27,8 @@ class Config:
 
     # --- reseau (ESP32 en WiFi sur un reseau ferme) ---
     # Doit correspondre a LOCAL_IP_BYTES dans Firmware/src/wifi_config.h
-    esp32_ip:   str  = "192.168.1.50"   # IP statique de l'ESP32 (placeholder, a adapter)
+    # esp32_ip:   str  = "192.168.1.50"   # IP statique de l'ESP32 (placeholder, a adapter)
+    esp32_ip:   str  = "127.0.0.1"
     esp32_port: int  = 4210             # port UDP d'ecoute sur l'ESP32
     dry_run:    bool = False             # True = pas d'envoi UDP (test sans ESP32)
 

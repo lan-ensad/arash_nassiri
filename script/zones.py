@@ -34,14 +34,21 @@ def build_zones(h: int, w: int) -> list[Zone]:
 
     def row_bounds_side(i: int, total: int) -> tuple[int, int]:
         """
-        i=0  → tranche la plus basse de l'image (y proche de h)
+        i=0  → tranche la plus basse (juste au-dessus de la bande du bas)
         i=N-1 → tranche la plus haute (y proche de 0)
         Ordre bas→haut pour suivre le sens DIN→DOUT le long du cote.
+
+        On limite a [0, h - dh] pour ne PAS chevaucher la bande du bas :
+        sinon la zone bottom-most du cote recouvre les zones bottom du coin,
+        ce qui (a) biaise l'extraction couleur dans le coin et (b) cree une
+        "ombre" visible dans draw_zones (la zone du cote est dessinee apres
+        et masque le coin des rectangles du bas).
         """
         inv = total - 1 - i
+        available_h = h - dh
         return (
-            round(inv * h / total),
-            round((inv + 1) * h / total),
+            round(inv * available_h / total),
+            round((inv + 1) * available_h / total),
         )
 
     # --- Chaine A : demi-bas gauche (milieu → gauche) ---
