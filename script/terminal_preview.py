@@ -2,7 +2,7 @@ import shutil
 import sys
 import time
 import numpy as np
-from config import CFG
+import config
 
 
 _RESET = "\x1b[0m"
@@ -59,11 +59,11 @@ class TerminalPreview:
         prefix = 20  # longueur de "Chaine X (xxx): "
         width  = max(20, cols - prefix - 1)
 
-        a = colors[: CFG.chain_a_len]
-        b = colors[CFG.chain_a_len : CFG.total_leds]
+        a = colors[: config.CFG.chain_a_len]
+        b = colors[config.CFG.chain_a_len : config.CFG.total_leds]
 
-        line_a  = f"Chaine A ({CFG.chain_a_len:3d}): {self._blocks(a, width)}"
-        line_b  = f"Chaine B ({CFG.chain_b_len:3d}): {self._blocks(b, width)}"
+        line_a  = f"Chaine A ({config.CFG.chain_a_len:3d}): {self._blocks(a, width)}"
+        line_b  = f"Chaine B ({config.CFG.chain_b_len:3d}): {self._blocks(b, width)}"
         line_st = f"Preview   ~{self._ema_fps:5.1f} fps (throttle {1/self._min_interval:.0f} Hz)"
 
         out = []

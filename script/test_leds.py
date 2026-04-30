@@ -6,11 +6,15 @@ Pause 2 s en fin de chaine, puis recommence.
 Usage : depuis le dossier script/
     python3 test_leds.py
 """
+import logging
 import time
 import numpy as np
 
-from config import CFG
+import config
+from log_setup import setup_logging
 from udp_sender import UdpSender
+
+log = logging.getLogger(__name__)
 
 
 ON_MS     = 100
@@ -21,33 +25,34 @@ COLOR_ON  = np.array([255, 255, 255], dtype=np.uint8)  # blanc
 CHAIN = "B"
 
 def main():
+    setup_logging()
     test_a = CHAIN in ("A", "BOTH")
     test_b = CHAIN in ("B", "BOTH")
     if not (test_a or test_b):
         raise ValueError(f"CHAIN doit etre 'A', 'B' ou 'BOTH' (recu : {CHAIN!r})")
 
     n_steps = max(
-        CFG.chain_a_len if test_a else 0,
-        CFG.chain_b_len if test_b else 0,
+        config.CFG.chain_a_len if test_a else 0,
+        config.CFG.chain_b_len if test_b else 0,
     )
 
     sender = UdpSender()
-    colors = np.zeros((CFG.total_leds, 3), dtype=np.uint8)
+    colors = np.zeros((config.CFG.total_leds, 3), dtype=np.uint8)
 
-    print(
-        f"Test : chaine A={CFG.chain_a_len} LEDs, chaine B={CFG.chain_b_len} LEDs, "
-        f"cible={CHAIN}, {n_steps} etapes"
+    log.info(
+        "Test : chaine A=%d LEDs, chaine B=%d LEDs, cible=%s, %d etapes",
+        config.CFG.chain_a_len, config.CFG.chain_b_len, CHAIN, n_steps,
     )
-    print("Ctrl+C pour arreter.")
+    log.info("Ctrl+C pour arreter.")
 
     try:
         while True:
             for i in range(n_steps):
                 colors[:] = 0
-                if test_a and i < CFG.chain_a_len:
+                if test_a and i < config.CFG.chain_a_len:
                     colors[i] = COLOR_ON
-                if test_b and i < CFG.chain_b_len:
-                    colors[CFG.chain_a_len + i] = COLOR_ON
+                if test_b and i < config.CFG.chain_b_len:
+                    colors[config.CFG.chain_a_len + i] = COLOR_ON
                 sender.send(colors)
                 time.sleep(ON_MS / 1000.0)
 
@@ -59,7 +64,7 @@ def main():
         colors[:] = 0
         sender.send(colors)
         sender.close()
-        print("\nStop.")
+        log.info("Stop.")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 """
 Fenetre OpenCV : creation, placement multi-moniteur (xrandr), fullscreen.
-No-op si CFG.headless.
+No-op si config.CFG.headless.
 """
 
+import logging
 import os
 import shutil
 import subprocess
@@ -10,13 +11,15 @@ import subprocess
 import cv2
 import numpy as np
 
-from config import CFG
+import config
 from list_displays import parse_listmonitors
+
+log = logging.getLogger(__name__)
 
 
 def _get_monitor(index: int) -> dict | None:
     if not shutil.which("xrandr"):
-        print("xrandr non trouve : monitor_index ignore (WM decidera de l'ecran).")
+        log.warning("xrandr non trouve : monitor_index ignore (WM decidera de l'ecran).")
         return None
     try:
         out = subprocess.check_output(
@@ -31,33 +34,38 @@ def _get_monitor(index: int) -> dict | None:
 class WindowManager:
     """
     Encapsule la fenetre OpenCV : creation, placement multi-moniteur,
-    fullscreen. No-op si CFG.headless.
+    fullscreen. No-op si config.CFG.headless.
     """
     NAME = "ambilight"
 
     def __init__(self):
         self._monitor = None
-        if CFG.headless:
-            print("Mode headless : pas de fenetre OpenCV (gain de performance).")
+        if config.CFG.headless:
+            log.info("Mode headless : pas de fenetre OpenCV (gain de performance).")
             return
 
         cv2.namedWindow(self.NAME, cv2.WINDOW_NORMAL)
 
         session = os.environ.get("XDG_SESSION_TYPE", "").lower()
-        if session == "wayland" and CFG.monitor_index is not None:
-            print("ATTENTION : session Wayland detectee. monitor_index peut etre")
-            print("            ignore par le compositeur. Preferer X11/XWayland.")
+        if session == "wayland" and config.CFG.monitor_index is not None:
+            log.warning(
+                "Session Wayland detectee : monitor_index peut etre ignore "
+                "par le compositeur. Preferer X11/XWayland."
+            )
 
-        if CFG.monitor_index is not None:
-            self._monitor = _get_monitor(CFG.monitor_index)
+        if config.CFG.monitor_index is not None:
+            self._monitor = _get_monitor(config.CFG.monitor_index)
             if self._monitor is not None:
                 m = self._monitor
-                print(
-                    f"Ecran   : [{m['index']}] {m['name']} "
-                    f"({m['width']}x{m['height']} @ ({m['x']}, {m['y']}))"
+                log.info(
+                    "Ecran : [%d] %s (%dx%d @ (%d, %d))",
+                    m["index"], m["name"], m["width"], m["height"], m["x"], m["y"],
                 )
             else:
-                print(f"Ecran index={CFG.monitor_index} introuvable -> position par defaut.")
+                log.warning(
+                    "Ecran index=%d introuvable -> position par defaut.",
+                    config.CFG.monitor_index,
+                )
 
         # Realiser la fenetre avec une frame vide pour que moveWindow ait un
         # effet avant le 1er imshow (sinon certains WM ignorent le placement).
@@ -78,7 +86,7 @@ class WindowManager:
         cv2.moveWindow(self.NAME, m["x"], m["y"])
 
     def apply_fullscreen(self) -> None:
-        if not CFG.fullscreen or CFG.headless:
+        if not config.CFG.fullscreen or config.CFG.headless:
             return
         cv2.setWindowProperty(
             self.NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
@@ -87,9 +95,9 @@ class WindowManager:
         self._place()
 
     def show(self, frame: np.ndarray) -> None:
-        if not CFG.headless:
+        if not config.CFG.headless:
             cv2.imshow(self.NAME, frame)
 
     def close(self) -> None:
-        if not CFG.headless:
+        if not config.CFG.headless:
             cv2.destroyAllWindows()

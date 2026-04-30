@@ -4,7 +4,10 @@ rapport au baseline auto-calibre (max FPS observe). Silencieux en regime
 nominal.
 """
 
+import logging
 import time
+
+log = logging.getLogger(__name__)
 
 
 class FpsMonitor:
@@ -27,12 +30,10 @@ class FpsMonitor:
             self._baseline = fps
         is_low = self._baseline > 0 and fps < self._baseline * self._thresh
         if is_low and not self._in_drop:
-            ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-            print(f"[{ts}] FPS chute : {fps:5.1f} (baseline {self._baseline:5.1f})")
+            log.warning("FPS chute : %5.1f (baseline %5.1f)", fps, self._baseline)
             self._in_drop = True
         elif not is_low and self._in_drop:
-            ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-            print(f"[{ts}] FPS retabli : {fps:5.1f} (baseline {self._baseline:5.1f})")
+            log.info("FPS retabli : %5.1f (baseline %5.1f)", fps, self._baseline)
             self._in_drop = False
         self._count = 0
         self._t0    = now

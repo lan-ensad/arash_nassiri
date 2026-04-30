@@ -1,7 +1,10 @@
+import logging
 import socket
 import struct
 import numpy as np
-from config import CFG
+import config
+
+log = logging.getLogger(__name__)
 
 
 # Format du paquet UDP (un par chaine) :
@@ -17,21 +20,21 @@ class UdpSender:
     def __init__(self):
         self._seq = 0
 
-        if CFG.dry_run:
+        if config.CFG.dry_run:
             self._sock = None
-            print(
-                f"Mode dry-run : pas d'envoi UDP ({CFG.total_leds} LEDs, "
-                "2 paquets/frame ignores)"
+            log.info(
+                "Mode dry-run : pas d'envoi UDP (%d LEDs, 2 paquets/frame ignores)",
+                config.CFG.total_leds,
             )
             return
 
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 64 * 1024)
-        self._addr = (CFG.esp32_ip, CFG.esp32_port)
-        pkt_a = _HEADER.size + CFG.chain_a_len * 3 + 1
-        pkt_b = _HEADER.size + CFG.chain_b_len * 3 + 1
-        print(f"UDP : cible {self._addr[0]}:{self._addr[1]}")
-        print(f"Paquets : chaine A = {pkt_a} o, chaine B = {pkt_b} o (par frame)")
+        self._addr = (config.CFG.esp32_ip, config.CFG.esp32_port)
+        pkt_a = _HEADER.size + config.CFG.chain_a_len * 3 + 1
+        pkt_b = _HEADER.size + config.CFG.chain_b_len * 3 + 1
+        log.info("UDP cible %s:%d", self._addr[0], self._addr[1])
+        log.info("Paquets : chaine A = %d o, chaine B = %d o (par frame)", pkt_a, pkt_b)
 
     def send(self, colors: np.ndarray) -> None:
         """colors : (N, 3) uint8, ordre chaine A puis chaine B (deja swap si mirror)."""
@@ -39,12 +42,12 @@ class UdpSender:
             return
 
         self._seq = (self._seq + 1) & 0xFFFF
-        data_a = colors[: CFG.chain_a_len].tobytes()
-        data_b = colors[CFG.chain_a_len : CFG.total_leds].tobytes()
+        data_a = colors[: config.CFG.chain_a_len].tobytes()
+        data_b = colors[config.CFG.chain_a_len : config.CFG.total_leds].tobytes()
 
-        tail = bytes([CFG.end_byte])
-        pkt_a = _HEADER.pack(CFG.start_byte, 0, self._seq) + data_a + tail
-        pkt_b = _HEADER.pack(CFG.start_byte, 1, self._seq) + data_b + tail
+        tail = bytes([config.CFG.end_byte])
+        pkt_a = _HEADER.pack(config.CFG.start_byte, 0, self._seq) + data_a + tail
+        pkt_b = _HEADER.pack(config.CFG.start_byte, 1, self._seq) + data_b + tail
 
         self._sock.sendto(pkt_a, self._addr)
         self._sock.sendto(pkt_b, self._addr)

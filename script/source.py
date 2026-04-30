@@ -4,13 +4,32 @@ Inclut le calcul du crop centre selon aspect ratio cible et la decimation
 des sources live trop rapides.
 """
 
+import logging
+
 import cv2
 import glob
+from pathlib import Path
 
-from config import CFG
+import config
+
+log = logging.getLogger(__name__)
 
 
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
+_SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def _resolve_path(p: str) -> str:
+    """
+    Resout les chemins relatifs par rapport au dossier du script (script/),
+    pas au CWD du processus. URL, /dev/* et chemins absolus passent intacts.
+    """
+    if not p or "://" in p or p.startswith("/dev/"):
+        return p
+    path = Path(p)
+    if path.is_absolute():
+        return str(path)
+    return str((_SCRIPT_DIR / p).resolve())
 
 
 def _is_live_source(source) -> bool:
@@ -55,23 +74,23 @@ def _list_video_devices() -> list[str]:
 
 
 def open_source() -> tuple[cv2.VideoCapture, object, bool]:
-    """Ouvre la source selon CFG. Retourne (cap, source, is_live)."""
-    if CFG.camera_index is not None:
+    """Ouvre la source selon config.CFG. Retourne (cap, source, is_live)."""
+    if config.CFG.camera_index is not None:
         devices = _list_video_devices()
         if devices:
-            print(f"Devices video detectes : {', '.join(devices)}")
-        source = CFG.camera_index
+            log.info("Devices video detectes : %s", ", ".join(devices))
+        source = config.CFG.camera_index
         cap    = cv2.VideoCapture(source)
         # MJPG = format natif Cam Link ; doit etre set AVANT width/height,
         # sinon le pilote peut renegocier en YUYV (latence + bande passante USB).
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         # Buffer minimal cote V4L2 : evite l'accumulation de frames.
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if CFG.camera_width:  cap.set(cv2.CAP_PROP_FRAME_WIDTH,  CFG.camera_width)
-        if CFG.camera_height: cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CFG.camera_height)
-        if CFG.camera_fps:    cap.set(cv2.CAP_PROP_FPS,          CFG.camera_fps)
+        if config.CFG.camera_width:  cap.set(cv2.CAP_PROP_FRAME_WIDTH,  config.CFG.camera_width)
+        if config.CFG.camera_height: cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CFG.camera_height)
+        if config.CFG.camera_fps:    cap.set(cv2.CAP_PROP_FPS,          config.CFG.camera_fps)
     else:
-        source = CFG.video_path
+        source = _resolve_path(config.CFG.video_path)
         if _is_image_source(source):
             cap = _StaticImageSource(source)
         else:

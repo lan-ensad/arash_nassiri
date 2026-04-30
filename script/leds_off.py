@@ -3,22 +3,28 @@
 Usage : depuis le dossier script/
     python3 leds_off.py
 """
+import logging
+
 import numpy as np
 
-from config import CFG
+import config
+from log_setup import setup_logging
 from udp_sender import UdpSender
+
+log = logging.getLogger(__name__)
 
 
 def main():
+    setup_logging()
     sender = UdpSender()
-    colors = np.zeros((CFG.total_leds, 3), dtype=np.uint8)
+    colors = np.zeros((config.CFG.total_leds, 3), dtype=np.uint8)
 
     # Envoi redondant : en UDP un paquet peut se perdre, insister un peu.
     for _ in range(5):
         sender.send(colors)
 
     sender.close()
-    print(f"Off : {CFG.total_leds} LEDs eteintes.")
+    log.info("Off : %d LEDs eteintes.", config.CFG.total_leds)
 
 
 if __name__ == "__main__":

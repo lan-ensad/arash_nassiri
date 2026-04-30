@@ -7,7 +7,7 @@ class Config:
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
     video_path:   str         = "../test_videos/ambilight_test.mp4"
-    camera_index: int | None  = 1   # ex : 0 pour la 1re webcam. None = utilise video_path
+    camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
     camera_width:  int   | None = 1920   # None = resolution native de la camera
@@ -25,7 +25,7 @@ class Config:
     target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
     loop:       bool  = False  # relire le fichier en boucle (ignore pour source live)
     fullscreen: bool  = False  # fenetre plein ecran sans overlay (mode prod)
-    headless:   bool  = True  # True = pas de fenetre OpenCV (gain perf, affichage externe)
+    headless:   bool  = False  # True = pas de fenetre OpenCV (gain perf, affichage externe)
 
     # --- ecran de sortie ---
     # Index de l'ecran (cf. `python3 script/list_displays.py`). None = WM par defaut.
@@ -38,7 +38,7 @@ class Config:
     dry_run:    bool = False             # True = pas d'envoi UDP (test sans ESP32)
 
     # --- preview terminal (dev) ---
-    terminal_preview:     bool  = False  # afficher les chaines en ANSI truecolor dans le terminal
+    terminal_preview:     bool  = True  # afficher les chaines en ANSI truecolor dans le terminal
     terminal_preview_hz:  float = 30.0   # frequence max de refresh du preview terminal
 
     # --- rubans (nb de LEDs par cote) ---
@@ -77,14 +77,26 @@ class Config:
     full_coverage: bool = False
     grid_cols:     int  = 26
     grid_rows:     int  = 20
-    zone_size:     int  = 150    # cote du carre echantillonne, en pixels
+    zone_size:     int  = 150    # cote du carre full_coverage, en pixels
+
+    # --- mode chain_squares (par defaut quand low_res et full_coverage sont False) ---
+    # Chaque LED = 1 carre de cote chain_zone_size, place sur le perimetre.
+    # Origine = centre du bord bas. Chaine A part vers la gauche, longe le
+    # cote gauche, finit sur le haut (vers le centre). Chaine B en miroir.
+    # Pas entre LEDs voisines = chain_zone_size (carres jointifs).
+    chain_zone_size: int = 6
+    # Decalage de l'index 0 le long du chemin (en nombre de LEDs). Permet
+    # d'ignorer N LEDs en debut de chaine si elles ne sont pas physiquement
+    # visibles : chain_shift=5 -> l'index 0 demarre a la position 5 du chemin,
+    # la fin progresse d'autant vers le haut centre.
+    chain_shift: int = 10
 
     # --- mode low_res ---
     # True = 2 zones uniquement (1 par chaine). Chaque zone produit 1 couleur
     # repliquee sur l'integralite de sa chaine (pas de gradient le long du
     # ruban). Utile pour effet ambiance simple ou bicolore.
     # Prioritaire sur full_coverage (et sur le mode peripherique).
-    low_res:      bool = True
+    low_res:      bool = False
     low_res_size: int  = 750    # cote du carre echantillonne, en pixels
     # Coin haut-gauche de la zone A (chaine A).
     low_res_a_xy: tuple[int, int]        = (0, 0)

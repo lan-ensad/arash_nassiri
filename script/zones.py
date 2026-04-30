@@ -1,13 +1,17 @@
+import logging
+
 import cv2
 import numpy as np
-from config import CFG
+import config
 
 
 Zone = tuple[int, int, int, int]  # x1, y1, x2, y2
 
+log = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
-# Construction des zones (peripherique / full_coverage / low_res)
+# Construction des zones (chain_squares / full_coverage / low_res)
 # ---------------------------------------------------------------------------
 def build_zones(h: int, w: int) -> list[Zone]:
     """
@@ -20,80 +24,103 @@ def build_zones(h: int, w: int) -> list[Zone]:
     - low_res        : 2 zones carrees uniques, dupliquees sur chaque chaine
                        (prioritaire sur full_coverage).
     - full_coverage  : grille uniforme de zones carrees couvrant l'image.
-    - peripherique   : bandes le long du bas + cotes (mode ambilight standard).
+    - chain_squares  : chaine de carrees jointifs sur le perimetre, partant
+                       du centre bas (mode par defaut).
 
     Transformations finales :
     - flip_v : miroir vertical (cas ESP32 monte en haut au lieu du bas).
     - mirror : echange chaine A <-> chaine B (compense un cablage miroir).
     """
-    if CFG.low_res:
+    if config.CFG.low_res:
         zones = _build_zones_low_res(h, w)
-    elif CFG.full_coverage:
+    elif config.CFG.full_coverage:
         zones = _build_zones_full_coverage(h, w)
     else:
-        zones = _build_zones_perimeter(h, w)
+        zones = _build_zones_chain_squares(h, w)
 
-    if CFG.flip_v:
+    if config.CFG.flip_v:
         zones = [(x1, h - y2, x2, h - y1) for (x1, y1, x2, y2) in zones]
 
-    if CFG.mirror:
-        # Swap des moitiees A et B (longueurs egales validees par CFG.validate()).
-        zones = zones[CFG.chain_a_len :] + zones[: CFG.chain_a_len]
+    if config.CFG.mirror:
+        # Swap des moitiees A et B (longueurs egales validees par config.CFG.validate()).
+        zones = zones[config.CFG.chain_a_len :] + zones[: config.CFG.chain_a_len]
 
     return zones
 
 
-def _build_zones_perimeter(h: int, w: int) -> list[Zone]:
+def _build_zones_chain_squares(h: int, w: int) -> list[Zone]:
     """
-    Mode ambilight standard : bandes au bas + cotes.
-    Chaine A : demi-bas milieu->gauche, puis cote gauche bas->haut.
-    Chaine B : demi-bas milieu->droite, puis cote droit  bas->haut.
+    Chaine de carres jointifs sur le perimetre. Chaque LED = 1 carre de
+    cote chain_zone_size centre sur un point du chemin.
 
-    Les cotes evitent la zone du bas (y dans [0, h - dh]) pour ne pas
-    chevaucher la bande horizontale dans les coins.
+    Chemin (chaine A) : centre_bas -> coin bas-gauche -> coin haut-gauche
+    -> centre_haut. Chaine B en miroir (vers la droite).
+
+    Si le chemin requis ((chain_shift + n_leds) * zs) depasse le perimetre,
+    les LEDs en exces sont clippees au centre haut (et un warning est emis).
+    Les carres sont clippes aux bords de l'image dans les coins.
     """
-    dh = max(1, int(h * CFG.depth_h))
-    dw = max(1, int(w * CFG.depth_w))
-    half_bottom = CFG.leds_bottom // 2
+    zs    = config.CFG.chain_zone_size
+    shift = config.CFG.chain_shift
+    half  = zs // 2
+    cx    = w // 2
 
-    def col_bounds(col: int) -> tuple[int, int]:
+    # Longueurs des 3 segments du chemin (centre -> coin -> coin -> centre).
+    seg_bottom = cx - half          # demi-bas
+    seg_side   = h - 2 * half       # cote (bas -> haut)
+    seg_top    = cx - half          # demi-haut
+    total      = seg_bottom + seg_side + seg_top
+
+    def a_pos(s: float) -> tuple[int, int]:
+        """Centre du carre a l'arc-length s sur le chemin chaine A (gauche)."""
+        s = min(max(s, 0), total)
+        if s <= seg_bottom:
+            return (cx - round(s), h - half)
+        s -= seg_bottom
+        if s <= seg_side:
+            return (half, (h - half) - round(s))
+        s -= seg_side
+        return (half + round(s), half)
+
+    def b_pos(s: float) -> tuple[int, int]:
+        """Mirror : chemin chaine B (droite)."""
+        s = min(max(s, 0), total)
+        if s <= seg_bottom:
+            return (cx + round(s), h - half)
+        s -= seg_bottom
+        if s <= seg_side:
+            return (w - half, (h - half) - round(s))
+        s -= seg_side
+        return ((w - half) - round(s), half)
+
+    def square_at(cx_p: int, cy_p: int) -> Zone:
         return (
-            round(col * w / CFG.leds_bottom),
-            round((col + 1) * w / CFG.leds_bottom),
+            max(0, cx_p - half),
+            max(0, cy_p - half),
+            min(w, cx_p + (zs - half)),
+            min(h, cy_p + (zs - half)),
         )
 
-    def row_bounds_side(i: int, total: int) -> tuple[int, int]:
-        # i=0 -> tranche la plus basse (juste au-dessus de la bande du bas).
-        inv = total - 1 - i
-        avail = h - dh
-        return (
-            round(inv * avail / total),
-            round((inv + 1) * avail / total),
+    # Verification du debordement (warning, pas erreur : clippage doux ensuite).
+    needed_a = (shift + config.CFG.chain_a_len - 1) * zs
+    needed_b = (shift + config.CFG.chain_b_len - 1) * zs
+    if needed_a > total or needed_b > total:
+        excess = max(needed_a, needed_b) - total
+        log.warning(
+            "chain_squares : chemin %dpx insuffisant pour %d LEDs + shift %d "
+            "@ chain_zone_size=%d (deborde de %dpx, LEDs en exces clippees "
+            "au centre haut). Reduire chain_zone_size, chain_shift, ou agrandir l'image.",
+            total, max(config.CFG.chain_a_len, config.CFG.chain_b_len),
+            shift, zs, excess,
         )
 
     zones: list[Zone] = []
-
-    # Chaine A : demi-bas gauche (milieu -> gauche)
-    for i in range(half_bottom):
-        col = half_bottom - 1 - i
-        x1, x2 = col_bounds(col)
-        zones.append((x1, h - dh, x2, h))
-
-    # Chaine A : cote gauche (bas -> haut)
-    for i in range(CFG.leds_left):
-        y1, y2 = row_bounds_side(i, CFG.leds_left)
-        zones.append((0, y1, dw, y2))
-
-    # Chaine B : demi-bas droite (milieu -> droite)
-    for i in range(CFG.leds_bottom - half_bottom):
-        col = half_bottom + i
-        x1, x2 = col_bounds(col)
-        zones.append((x1, h - dh, x2, h))
-
-    # Chaine B : cote droit (bas -> haut)
-    for i in range(CFG.leds_right):
-        y1, y2 = row_bounds_side(i, CFG.leds_right)
-        zones.append((w - dw, y1, w, y2))
+    for i in range(config.CFG.chain_a_len):
+        s = (shift + i) * zs
+        zones.append(square_at(*a_pos(s)))
+    for i in range(config.CFG.chain_b_len):
+        s = (shift + i) * zs
+        zones.append(square_at(*b_pos(s)))
 
     return zones
 
@@ -103,18 +130,18 @@ def _build_zones_low_res(h: int, w: int) -> list[Zone]:
     2 zones carrees uniques, repliquees sur l'integralite de chaque chaine.
     low_res_a_xy = coin haut-gauche zone A. low_res_b_xy=None -> aligne a droite.
     """
-    size = CFG.low_res_size
+    size = config.CFG.low_res_size
 
-    ax, ay = CFG.low_res_a_xy
+    ax, ay = config.CFG.low_res_a_xy
     zone_a = (max(0, ax), max(0, ay), min(w, ax + size), min(h, ay + size))
 
-    if CFG.low_res_b_xy is None:
+    if config.CFG.low_res_b_xy is None:
         bx, by = w - size, 0
     else:
-        bx, by = CFG.low_res_b_xy
+        bx, by = config.CFG.low_res_b_xy
     zone_b = (max(0, bx), max(0, by), min(w, bx + size), min(h, by + size))
 
-    return [zone_a] * CFG.chain_a_len + [zone_b] * CFG.chain_b_len
+    return [zone_a] * config.CFG.chain_a_len + [zone_b] * config.CFG.chain_b_len
 
 
 def _build_zones_full_coverage(h: int, w: int) -> list[Zone]:
@@ -122,9 +149,9 @@ def _build_zones_full_coverage(h: int, w: int) -> list[Zone]:
     Grille uniforme de zones carrees (cote = zone_size) couvrant toute
     l'image. Si zone_size > espacement, les zones se chevauchent (lissage
     spatial). Mapping LED -> cellule : split + serpentin par colonnes.
-    Validation des dimensions assuree par CFG.validate().
+    Validation des dimensions assuree par config.CFG.validate().
     """
-    cols, rows, zs = CFG.grid_cols, CFG.grid_rows, CFG.zone_size
+    cols, rows, zs = config.CFG.grid_cols, config.CFG.grid_rows, config.CFG.zone_size
     half_cols = cols // 2
 
     def cell_center(col: int, row: int) -> tuple[int, int]:

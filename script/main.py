@@ -1,8 +1,11 @@
+import argparse
+import dataclasses
+import logging
 import time
 
 import cv2
 
-from config import CFG
+import config
 from zones import build_zones, ColorExtractor, draw_zones
 from colors import process, LowResHistory
 from udp_sender import UdpSender
@@ -10,55 +13,114 @@ from terminal_preview import TerminalPreview
 from source import open_source, compute_crop, compute_skip_ratio
 from window import WindowManager
 from fps_monitor import FpsMonitor
+from log_setup import setup_logging
+
+log = logging.getLogger(__name__)
+
+
+def _parse_args() -> argparse.Namespace:
+    """
+    CLI minimal pour les overrides courants. Les flags non specifies
+    laissent CFG inchange. Pour modifier les autres champs (gamma,
+    saturation, geometrie LEDs...), editer config.py directement.
+    """
+    p = argparse.ArgumentParser(
+        description="Ambilight UDP : capture video -> couleurs LEDs -> ESP32."
+    )
+    p.add_argument("--video", type=str, help="chemin video / URL (ignore camera)")
+    p.add_argument("--camera", type=int, help="index camera (0, 1, ...)")
+    p.add_argument("--target-fps", type=float)
+    p.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=None,
+                   help="pas d'envoi UDP")
+    p.add_argument("--headless", action=argparse.BooleanOptionalAction, default=None,
+                   help="pas de fenetre OpenCV")
+    p.add_argument("--fullscreen", action=argparse.BooleanOptionalAction, default=None)
+    p.add_argument("--mirror", action=argparse.BooleanOptionalAction, default=None,
+                   help="echange chaine A/B")
+    p.add_argument("--low-res", action=argparse.BooleanOptionalAction, default=None)
+    p.add_argument("--full-coverage", action=argparse.BooleanOptionalAction, default=None)
+    p.add_argument("--loop", action=argparse.BooleanOptionalAction, default=None,
+                   help="reboucle la lecture fichier")
+    p.add_argument("-v", "--verbose", action="store_true",
+                   help="active les logs DEBUG")
+    return p.parse_args()
+
+
+def _apply_overrides(args: argparse.Namespace) -> None:
+    """Applique les overrides CLI sur CFG (frozen -> dataclasses.replace)."""
+    overrides = {}
+    if args.video is not None:
+        overrides["video_path"]   = args.video
+        overrides["camera_index"] = None
+    if args.camera is not None:
+        overrides["camera_index"] = args.camera
+    if args.target_fps is not None:
+        overrides["target_fps"]   = args.target_fps
+    for name in ("dry_run", "headless", "fullscreen", "mirror", "low_res",
+                 "loop"):
+        v = getattr(args, name)
+        if v is not None:
+            overrides[name] = v
+    if args.full_coverage is not None:
+        overrides["full_coverage"] = args.full_coverage
+
+    if overrides:
+        config.CFG = dataclasses.replace(config.CFG, **overrides)
+        log.debug("Overrides CLI appliques : %s", overrides)
 
 
 def main() -> None:
-    CFG.validate()
+    args = _parse_args()
+    setup_logging(level=logging.DEBUG if args.verbose else logging.INFO)
+    _apply_overrides(args)
+    cfg = config.CFG  # rebind apres _apply_overrides
+    cfg.validate()
+
     cap, source, live = open_source()
 
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    fps        = CFG.target_fps if CFG.target_fps else native_fps
+    fps        = cfg.target_fps if cfg.target_fps else native_fps
     src_w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     src_h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     delay      = 1.0 / fps
 
-    cx0, cy0, cx1, cy1 = compute_crop(src_w, src_h, CFG.target_aspect)
+    cx0, cy0, cx1, cy1 = compute_crop(src_w, src_h, cfg.target_aspect)
     w, h               = cx1 - cx0, cy1 - cy0
     crop_active        = (cx0, cy0, cx1, cy1) != (0, 0, src_w, src_h)
 
     src_desc = f"camera index {source}" if isinstance(source, int) else str(source)
-    kind     = "live" if live else "fichier"
-    print(f"Source  : [{kind}] {src_desc}")
-    print(f"Video   : {src_w}x{src_h} @ {native_fps:.2f}fps natif -> cible {fps:.2f}fps")
+    log.info("Source [%s] %s", "live" if live else "fichier", src_desc)
+    log.info("Video %dx%d @ %.2ffps natif -> cible %.2ffps",
+             src_w, src_h, native_fps, fps)
     if crop_active:
-        print(f"Crop    : {w}x{h} (aspect cible {CFG.target_aspect:.4f}, "
-              f"offset x={cx0} y={cy0})")
-    print(f"LEDs    : {CFG.total_leds} total (bas {CFG.leds_bottom} / "
-          f"droite {CFG.leds_right} / gauche {CFG.leds_left})")
-    print(f"Chaines : A (gauche) = {CFG.chain_a_len} LEDs, B (droite) = "
-          f"{CFG.chain_b_len} LEDs")
-    if CFG.mirror:
-        print("Mirror  : chaines A et B echangees (compensation cablage miroir)")
+        log.info("Crop %dx%d (aspect cible %.4f, offset x=%d y=%d)",
+                 w, h, cfg.target_aspect, cx0, cy0)
+    log.info("LEDs %d total (bas %d / droite %d / gauche %d)",
+             cfg.total_leds, cfg.leds_bottom, cfg.leds_right, cfg.leds_left)
+    log.info("Chaines : A (gauche) = %d LEDs, B (droite) = %d LEDs",
+             cfg.chain_a_len, cfg.chain_b_len)
+    if cfg.mirror:
+        log.info("Mirror : chaines A et B echangees")
 
     zones     = build_zones(h, w)
     extractor = ColorExtractor(zones)
-    history   = LowResHistory(CFG.low_res_window)
+    history   = LowResHistory(cfg.low_res_window)
     sender    = UdpSender()
-    preview   = TerminalPreview(CFG.terminal_preview_hz) if CFG.terminal_preview else None
+    preview   = TerminalPreview(cfg.terminal_preview_hz) if cfg.terminal_preview else None
     window    = WindowManager()
     fps_mon   = FpsMonitor() if preview is None else None
     prev      = None
 
-    skip_ratio = compute_skip_ratio(live, native_fps, CFG.target_fps)
+    skip_ratio = compute_skip_ratio(live, native_fps, cfg.target_fps)
     if skip_ratio > 1:
-        print(f"Decimation : capture {native_fps:.1f}fps -> traite 1/{skip_ratio} "
-              f"(soit ~{native_fps/skip_ratio:.1f}fps)")
+        log.info("Decimation : capture %.1ffps -> traite 1/%d (~%.1ffps)",
+                 native_fps, skip_ratio, native_fps / skip_ratio)
     skip_counter = 0
 
-    if CFG.headless:
-        print("Controles : [Ctrl+C] dans ce terminal pour arreter")
+    if cfg.headless:
+        log.info("Controles : [Ctrl+C] dans ce terminal pour arreter")
     else:
-        print("Controles : [q] ou [Echap] dans la fenetre, ou [Ctrl+C] dans ce terminal")
+        log.info("Controles : [q]/[Echap] dans la fenetre, ou [Ctrl+C] dans ce terminal")
 
     first_frame  = True
     just_rewound = False
@@ -72,7 +134,7 @@ def main() -> None:
                 if live:
                     time.sleep(0.05)
                     continue
-                if CFG.loop:
+                if cfg.loop:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     prev = None  # reset lissage temporel au rebouclage
                     just_rewound = True
@@ -98,8 +160,8 @@ def main() -> None:
             if preview is not None:
                 preview.draw(colors)
 
-            if not CFG.headless:
-                if not CFG.fullscreen:
+            if not cfg.headless:
+                if not cfg.fullscreen:
                     draw_zones(frame, zones, colors)
                 window.show(frame)
 
@@ -132,7 +194,7 @@ def main() -> None:
         sender.close()
         if preview is not None:
             preview.close()
-        print("Arret propre.")
+        log.info("Arret propre.")
 
 
 if __name__ == "__main__":
