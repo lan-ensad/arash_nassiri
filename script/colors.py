@@ -34,13 +34,25 @@ def boost_saturation(colors: np.ndarray) -> np.ndarray:
     return rgb.reshape(-1, 3).astype(np.float32)
 
 
+def apply_shadow_lift(colors: np.ndarray) -> np.ndarray:
+    """
+    Remontee non-lineaire des noirs : out = 255 * (in/255) ** (1/shadow_lift).
+    Boost les zones sombres sans cramer les zones claires (255 reste 255).
+    """
+    if CFG.shadow_lift == 1.0:
+        return colors
+    norm = colors.clip(0, 255) / 255.0
+    return np.power(norm, 1.0 / CFG.shadow_lift) * 255.0
+
+
 def apply_gamma(colors: np.ndarray) -> np.ndarray:
     """Correction gamma via lookup table."""
     return _GAMMA_TABLE[colors.clip(0, 255).astype(np.uint8)]
 
 
 def process(current: np.ndarray, previous: np.ndarray | None) -> np.ndarray:
-    """Pipeline complet : lissage → saturation → gamma → uint8."""
+    """Pipeline complet : lissage → saturation → shadow lift → gamma → uint8."""
     c = smooth(current, previous)
     c = boost_saturation(c)
+    c = apply_shadow_lift(c)
     return apply_gamma(c)

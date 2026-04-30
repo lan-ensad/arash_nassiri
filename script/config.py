@@ -7,19 +7,19 @@ class Config:
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
     # video_path:   str         = "data/sample.mp4"
-    # video_path:   str         = "../test_videos/ambilight_test.mp4"
-    camera_index: int | None  = 1   # ex : 0 pour la 1re webcam. None = utilise video_path
+    video_path:   str         = "../test_videos/ambilight_test.mp4"
+    camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
-    camera_width:  int   | None = 1920   # None = resolution native de la camera
-    camera_height: int   | None = 1080
+    camera_width:  int   | None = None   # None = resolution native de la camera
+    camera_height: int   | None = None
     camera_fps:    float | None = 30   # None = fps natif, sinon tentative de set
 
     # --- lecture ---
     target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
-    loop:       bool  = False  # relire le fichier en boucle (ignore pour source live)
-    fullscreen: bool  = True  # fenetre plein ecran sans overlay (mode prod)
-    headless:   bool  = True   # True = pas de fenetre OpenCV (gain perf, affichage externe)
+    loop:       bool  = True  # relire le fichier en boucle (ignore pour source live)
+    fullscreen: bool  = False  # fenetre plein ecran sans overlay (mode prod)
+    headless:   bool  = False   # True = pas de fenetre OpenCV (gain perf, affichage externe)
 
     # --- ecran de sortie ---
     # Index de l'ecran (cf. `python3 script/list_displays.py`). None = WM par defaut.
@@ -56,9 +56,12 @@ class Config:
     depth_w: float = 0.08   # gauche / droite
 
     # --- traitement couleur ---
+    gamma:            float = 2.2   # correction gamma WS2812
     smoothing:        float = 0.30  # 0 = aucun, 0.5 = fort
     saturation_boost: float = 1.6   # 1.0 = aucun boost
-    gamma:            float = 2.2   # correction gamma WS2812
+    # Remontee non-lineaire des noirs (utile sur video sombre).
+    # 1.0 = aucun, 2.0 = fort : 10→~50, 128→~180, 255→255.
+    shadow_lift:      float = 1.0
 
     # --- protocole UDP ---
     start_byte: int = 0xAA
