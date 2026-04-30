@@ -6,9 +6,7 @@ class Config:
     # Priorite : si camera_index est defini, utilise ce flux camera (webcam, carte
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
-    # video_path:   str         = "data/sample.mp4"
     video_path:   str         = "../test_videos/ambilight_test.mp4"
-    # video_path:   str         = "test_images/white_1.png"
     camera_index: int | None  = 1   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
@@ -35,8 +33,7 @@ class Config:
 
     # --- reseau (ESP32 en WiFi sur un reseau ferme) ---
     # Doit correspondre a LOCAL_IP_BYTES dans Firmware/src/wifi_config.h
-    esp32_ip:   str  = "192.168.8.50"   # IP statique de l'ESP32 (placeholder, a adapter)
-    # esp32_ip:   str  = "127.0.0.1"
+    esp32_ip:   str  = "192.168.8.50"   # IP statique de l'ESP32
     esp32_port: int  = 4210             # port UDP d'ecoute sur l'ESP32
     dry_run:    bool = False             # True = pas d'envoi UDP (test sans ESP32)
 
@@ -138,5 +135,49 @@ class Config:
     # --- protocole UDP ---
     start_byte: int = 0xAA
     end_byte:   int = 0x55
+
+    # --- geometrie derivee (source unique de verite) ---
+    @property
+    def chain_a_len(self) -> int:
+        return self.leds_bottom // 2 + self.leds_left
+
+    @property
+    def chain_b_len(self) -> int:
+        return (self.leds_bottom - self.leds_bottom // 2) + self.leds_right
+
+    @property
+    def total_leds(self) -> int:
+        return self.chain_a_len + self.chain_b_len
+
+    def validate(self) -> None:
+        """Verifie la coherence de la config. Echec rapide au demarrage."""
+        if self.leds_bottom % 2 != 0:
+            raise ValueError(
+                f"leds_bottom ({self.leds_bottom}) doit etre pair pour une "
+                "repartition symetrique entre les deux chaines."
+            )
+        if self.mirror and self.chain_a_len != self.chain_b_len:
+            raise ValueError(
+                f"mirror=True impose chaine A et B de meme longueur "
+                f"(A={self.chain_a_len}, B={self.chain_b_len}). "
+                "Verifier leds_left == leds_right."
+            )
+        if self.full_coverage:
+            cols, rows = self.grid_cols, self.grid_rows
+            if cols * rows != self.total_leds:
+                raise ValueError(
+                    f"full_coverage : grid_cols * grid_rows = {cols*rows} "
+                    f"doit egaler le total des LEDs ({self.total_leds})."
+                )
+            if cols % 2 != 0:
+                raise ValueError(
+                    f"full_coverage : grid_cols ({cols}) doit etre pair."
+                )
+            if (cols // 2) * rows != self.chain_a_len:
+                raise ValueError(
+                    f"full_coverage : (grid_cols/2) * grid_rows = "
+                    f"{(cols // 2) * rows} doit egaler chain_a_len "
+                    f"({self.chain_a_len})."
+                )
 
 CFG = Config()

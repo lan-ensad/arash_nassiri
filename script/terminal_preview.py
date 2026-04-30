@@ -15,8 +15,6 @@ class TerminalPreview:
     """
 
     def __init__(self, throttle_hz: float = 10.0):
-        self._chain_a_len = CFG.leds_bottom // 2 + CFG.leds_left
-        self._chain_b_len = (CFG.leds_bottom - CFG.leds_bottom // 2) + CFG.leds_right
         self._min_interval = 1.0 / throttle_hz
         self._last_t = 0.0
         self._printed_once = False
@@ -61,11 +59,11 @@ class TerminalPreview:
         prefix = 20  # longueur de "Chaine X (xxx): "
         width  = max(20, cols - prefix - 1)
 
-        a = colors[: self._chain_a_len]
-        b = colors[self._chain_a_len : self._chain_a_len + self._chain_b_len]
+        a = colors[: CFG.chain_a_len]
+        b = colors[CFG.chain_a_len : CFG.total_leds]
 
-        line_a  = f"Chaine A ({self._chain_a_len:3d}): {self._blocks(a, width)}"
-        line_b  = f"Chaine B ({self._chain_b_len:3d}): {self._blocks(b, width)}"
+        line_a  = f"Chaine A ({CFG.chain_a_len:3d}): {self._blocks(a, width)}"
+        line_b  = f"Chaine B ({CFG.chain_b_len:3d}): {self._blocks(b, width)}"
         line_st = f"Preview   ~{self._ema_fps:5.1f} fps (throttle {1/self._min_interval:.0f} Hz)"
 
         out = []

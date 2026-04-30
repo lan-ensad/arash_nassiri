@@ -10,19 +10,15 @@ from udp_sender import UdpSender
 
 
 def main():
-    chain_a = CFG.leds_bottom // 2 + CFG.leds_left
-    chain_b = (CFG.leds_bottom - CFG.leds_bottom // 2) + CFG.leds_right
-    total   = chain_a + chain_b
-
     sender = UdpSender()
-    colors = np.zeros((total, 3), dtype=np.uint8)
+    colors = np.zeros((CFG.total_leds, 3), dtype=np.uint8)
 
-    # Envoi redondant : en UDP un paquet peut se perdre, on insiste un peu.
+    # Envoi redondant : en UDP un paquet peut se perdre, insister un peu.
     for _ in range(5):
         sender.send(colors)
 
     sender.close()
-    print(f"Off : {total} LEDs eteintes.")
+    print(f"Off : {CFG.total_leds} LEDs eteintes.")
 
 
 if __name__ == "__main__":
