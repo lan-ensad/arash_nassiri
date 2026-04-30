@@ -50,9 +50,58 @@ def apply_gamma(colors: np.ndarray) -> np.ndarray:
     return _GAMMA_TABLE[colors.clip(0, 255).astype(np.uint8)]
 
 
+def smooth_neighbor(colors: np.ndarray) -> np.ndarray:
+    """
+    Lissage spatial le long du ruban : limite l'ecart de couleur entre 2 LEDs
+    voisines dans la meme chaine a CFG.max_neighbor_delta (par canal RGB).
+    Si l'ecart depasse la limite, la LED suivante est rapprochee de la
+    precedente. Sens DIN→DOUT, chaines A et B traitees independamment.
+    """
+    if CFG.max_neighbor_delta <= 0:
+        return colors
+
+    half_bottom = CFG.leds_bottom // 2
+    chain_a_len = half_bottom + CFG.leds_left
+    chain_b_len = (CFG.leds_bottom - half_bottom) + CFG.leds_right
+    md          = float(CFG.max_neighbor_delta)
+
+    out = colors.astype(np.float32, copy=True)
+
+    # Forward pass dans chaine A : LED 0 → chain_a_len-1
+    for i in range(1, chain_a_len):
+        diff   = out[i] - out[i - 1]
+        out[i] = out[i - 1] + np.clip(diff, -md, md)
+
+    # Forward pass dans chaine B : LED chain_a_len → fin (independante)
+    for i in range(chain_a_len + 1, chain_a_len + chain_b_len):
+        diff   = out[i] - out[i - 1]
+        out[i] = out[i - 1] + np.clip(diff, -md, md)
+
+    return out
+
+
+def apply_filter(colors: np.ndarray) -> np.ndarray:
+    """
+    Filtre colorimetrique multiplicatif par canal RGB. Applique en sortie,
+    apres gamma : compensation derive batch LED, balance des blancs, teinte.
+    (1.0, 1.0, 1.0) = neutre, court-circuit.
+    """
+    fr, fg, fb = CFG.filter_rgb
+    if (fr, fg, fb) == (1.0, 1.0, 1.0):
+        return colors
+    out = colors.astype(np.float32, copy=True)
+    out[:, 0] *= fr
+    out[:, 1] *= fg
+    out[:, 2] *= fb
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 def process(current: np.ndarray, previous: np.ndarray | None) -> np.ndarray:
-    """Pipeline complet : lissage → saturation → shadow lift → gamma → uint8."""
+    """Pipeline complet : lissage temporel → saturation → shadow lift →
+    lissage spatial → gamma → filtre RGB → uint8."""
     c = smooth(current, previous)
     c = boost_saturation(c)
     c = apply_shadow_lift(c)
-    return apply_gamma(c)
+    c = smooth_neighbor(c)
+    c = apply_gamma(c)
+    return apply_filter(c)

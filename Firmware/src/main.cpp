@@ -1,3 +1,4 @@
+#include <ArduinoOTA.h>
 #include <NeoPixelBus.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -35,7 +36,7 @@
 
 // --- Limite de luminosite (protection alimentation) ---
 // 255 = aucune limite, 192 = 75% (~23A max), 128 = 50% (~15.6A max)
-#define MAX_BRIGHTNESS  230
+#define MAX_BRIGHTNESS  255
 
 // --- Objets globaux ---
 NeoPixelBus<NeoGrbFeature, NeoEsp32BitBangWs2812xMethod> stripA(LEDS_CHAIN_A, DATA_PIN_A);
@@ -53,6 +54,11 @@ bool     seq_b_init = false;
 // proprement quand le sender est arrete puis relance (seq cote Python repart a 0).
 #define SESSION_TIMEOUT_MS  500
 uint32_t last_packet_ms = 0;
+
+// Flag pose pendant un flash OTA : suspend la reception UDP + Show() pour
+// liberer le CPU et eviter que les interrupts off du bit-bang WS2812
+// parasitent la reception du firmware.
+volatile bool ota_in_progress = false;
 
 // -----------------------------------------------------------
 // Boot indicator sur la 1re LED des deux chaines
@@ -145,10 +151,36 @@ void setup() {
     udp.begin(UDP_PORT);
     Serial.print("UDP : ecoute sur le port ");
     Serial.println(UDP_PORT);
+
+    // --- ArduinoOTA (flash sans fil) ---
+    ArduinoOTA.setHostname(WIFI_HOSTNAME);
+    ArduinoOTA.setPassword("ambilight");
+    ArduinoOTA.onStart([]() {
+        ota_in_progress = true;
+        // Eteindre les rubans : les Show() bit-bang desactivent les
+        // interrupts et perturbent la reception du firmware OTA.
+        stripA.ClearTo(RgbColor(0, 0, 0));
+        stripB.ClearTo(RgbColor(0, 0, 0));
+        stripA.Show();
+        stripB.Show();
+        Serial.println("OTA: start");
+    });
+    ArduinoOTA.onEnd([]() {
+        Serial.println("OTA: end (reboot)");
+    });
+    ArduinoOTA.onError([](ota_error_t e) {
+        ota_in_progress = false;
+        Serial.printf("OTA: error %u\n", e);
+    });
+    ArduinoOTA.begin();
+    Serial.println("OTA pret");
 }
 
 // -----------------------------------------------------------
 void loop() {
+    ArduinoOTA.handle();
+    if (ota_in_progress) return;  // suspendre tout pendant le flash
+
     int packet_size = udp.parsePacket();
     if (packet_size <= 0) return;
 

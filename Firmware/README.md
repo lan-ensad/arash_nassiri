@@ -27,10 +27,36 @@ Remplir les placeholders dans `src/wifi_config.h` avant de flasher :
 
 ## Flashage
 
+### USB (premier flash, et recuperation)
+
 ```bash
 pio run --target upload
 pio device monitor    # optionnel : logs WiFi/UDP au boot
 ```
+
+### OTA (flash sans fil via WiFi)
+
+Le firmware embarque ArduinoOTA : a partir du moment ou il a ete flashe une
+fois en USB, les flashs suivants peuvent se faire via le reseau.
+
+**Pre-requis machine hote** : autoriser l'ESP32 a initier des connexions
+TCP entrantes (sinon UFW/firewall bloque le retour TCP de l'OTA et `espota`
+fait `Authenticating...OK` puis `No response from device`) :
+
+```bash
+sudo ufw allow from 192.168.8.50    # IP de l'ESP32 (LOCAL_IP_BYTES)
+```
+
+**Flash OTA** :
+
+```bash
+pio run -e seeed_xiao_esp32c6_ota -t upload
+```
+
+L'environnement `seeed_xiao_esp32c6_ota` defini dans `platformio.ini`
+contient `--host_ip=192.168.8.202` (IP de la machine hote sur le subnet
+192.168.8.x). Mettre a jour cette valeur si l'IP de la machine change
+(DHCP) -- une reservation DHCP cote routeur est plus robuste a terme.
 
 ## Indicateurs visuels au boot
 
