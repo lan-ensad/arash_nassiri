@@ -160,16 +160,10 @@ def main() -> None:
     first_frame   = True
     just_rewound  = False
 
-    # Compteur FPS : log uniquement sur transition (chute / retablissement) pour
-    # ne pas polluer le log en regime nominal. Baseline = max FPS observe (auto-
-    # calibre, evite de coder en dur target_fps qui n'est pas toujours respecte
-    # par la camera).
-    fps_count             = 0
-    fps_t0                = time.perf_counter()
-    fps_log_dt            = 1.0    # fenetre de mesure
-    fps_baseline          = 0.0    # max FPS observe depuis le demarrage
-    fps_drop_threshold    = 0.80   # alerte si fps < 80% du baseline
-    fps_low_state         = False  # True = on est actuellement en chute
+    # Compteur FPS independant du terminal_preview (utile quand preview off)
+    fps_count   = 0
+    fps_t0      = time.perf_counter()
+    fps_log_dt  = 1.0  # intervalle de log en secondes
 
     try:
         if CFG.headless:
@@ -219,30 +213,14 @@ def main() -> None:
                 if key == ord("q") or key == 27:  # q ou Echap
                     break
 
-            # FPS : log uniquement sur transition (chute > 20% sous le baseline,
-            # ou retablissement). Pas de log en regime nominal -> log lisible.
-            # Skip si le preview terminal est actif (il affiche deja son propre FPS).
+            # Log FPS 1x/s (seulement si le preview terminal est desactive,
+            # sinon le preview affiche deja son propre FPS)
             if preview is None:
                 fps_count += 1
                 now = time.perf_counter()
                 if now - fps_t0 >= fps_log_dt:
                     fps_measured = fps_count / (now - fps_t0)
-                    if fps_measured > fps_baseline:
-                        fps_baseline = fps_measured
-                    is_low = (
-                        fps_baseline > 0
-                        and fps_measured < fps_baseline * fps_drop_threshold
-                    )
-                    if is_low and not fps_low_state:
-                        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-                        print(f"[{ts}] FPS chute : {fps_measured:5.1f} "
-                              f"(baseline {fps_baseline:5.1f})")
-                        fps_low_state = True
-                    elif not is_low and fps_low_state:
-                        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-                        print(f"[{ts}] FPS retabli : {fps_measured:5.1f} "
-                              f"(baseline {fps_baseline:5.1f})")
-                        fps_low_state = False
+                    print(f"FPS : {fps_measured:5.1f}")
                     fps_count = 0
                     fps_t0    = now
 

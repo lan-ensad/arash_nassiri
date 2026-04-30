@@ -17,9 +17,9 @@ class Config:
 
     # --- lecture ---
     target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
-    loop:       bool  = False  # relire le fichier en boucle (ignore pour source live)
-    fullscreen: bool  = True  # fenetre plein ecran sans overlay (mode prod)
-    headless:   bool  = True   # True = pas de fenetre OpenCV (gain perf, affichage externe)
+    loop:       bool  = True  # relire le fichier en boucle (ignore pour source live)
+    fullscreen: bool  = False  # fenetre plein ecran sans overlay (mode prod)
+    headless:   bool  = False  # True = pas de fenetre OpenCV (gain perf, affichage externe)
 
     # --- ecran de sortie ---
     # Index de l'ecran (cf. `python3 script/list_displays.py`). None = WM par defaut.
@@ -27,13 +27,13 @@ class Config:
 
     # --- reseau (ESP32 en WiFi sur un reseau ferme) ---
     # Doit correspondre a LOCAL_IP_BYTES dans Firmware/src/wifi_config.h
-    esp32_ip:   str  = "192.168.8.50"   # IP statique de l'ESP32 (placeholder, a adapter)
-    # esp32_ip:   str  = "127.0.0.1"
+    # esp32_ip:   str  = "192.168.1.50"   # IP statique de l'ESP32 (placeholder, a adapter)
+    esp32_ip:   str  = "127.0.0.1"
     esp32_port: int  = 4210             # port UDP d'ecoute sur l'ESP32
     dry_run:    bool = False             # True = pas d'envoi UDP (test sans ESP32)
 
     # --- preview terminal (dev) ---
-    terminal_preview:     bool  = False  # afficher les chaines en ANSI truecolor dans le terminal
+    terminal_preview:     bool  = True   # afficher les chaines en ANSI truecolor dans le terminal
     terminal_preview_hz:  float = 30.0   # frequence max de refresh du preview terminal
 
     # --- rubans (nb de LEDs par cote) ---

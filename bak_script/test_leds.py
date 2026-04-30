@@ -13,12 +13,12 @@ from config import CFG
 from udp_sender import UdpSender
 
 
-ON_MS     = 100
+ON_MS     = 50
 PAUSE_S   = 2.0
 COLOR_ON  = np.array([255, 255, 255], dtype=np.uint8)  # blanc
 
 # Chaine(s) a tester : "A", "B" ou "BOTH"
-CHAIN = "A"
+CHAIN = "BOTH"
 
 def main():
     chain_a = CFG.leds_bottom // 2 + CFG.leds_left
