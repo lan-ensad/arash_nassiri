@@ -9,7 +9,7 @@ class Config:
     # video_path:   str         = "data/sample.mp4"
     video_path:   str         = "../test_videos/ambilight_test.mp4"
     # video_path:   str         = "test_images/white_1.png"
-    camera_index: int | None  = 1   # ex : 0 pour la 1re webcam. None = utilise video_path
+    camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
     camera_width:  int   | None = 1920   # None = resolution native de la camera
@@ -27,7 +27,7 @@ class Config:
     target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
     loop:       bool  = False  # relire le fichier en boucle (ignore pour source live)
     fullscreen: bool  = False  # fenetre plein ecran sans overlay (mode prod)
-    headless:   bool  = True  # True = pas de fenetre OpenCV (gain perf, affichage externe)
+    headless:   bool  = False  # True = pas de fenetre OpenCV (gain perf, affichage externe)
 
     # --- ecran de sortie ---
     # Index de l'ecran (cf. `python3 script/list_displays.py`). None = WM par defaut.
@@ -87,8 +87,8 @@ class Config:
     # repliquee sur l'integralite de sa chaine (pas de gradient le long du
     # ruban). Utile pour effet ambiance simple ou bicolore.
     # Prioritaire sur full_coverage (et sur le mode peripherique).
-    low_res:      bool = True
-    low_res_size: int  = 750    # cote du carre echantillonne, en pixels
+    low_res:      bool = False
+    low_res_size: int  = 500    # cote du carre echantillonne, en pixels
     # Coin haut-gauche de la zone A (chaine A).
     low_res_a_xy: tuple[int, int]        = (0, 0)
     # Coin haut-gauche de la zone B (chaine B). None = auto-aligne a droite
@@ -101,12 +101,12 @@ class Config:
     # de plus que ce delta (norme L2 RGB, 0..441), l'historique est vide et
     # la nouvelle valeur est adoptee immediatement → preserve la reactivite
     # sur changement de scene. 0 = snap desactive.
-    low_res_snap_delta: float = 150.0
+    low_res_snap_delta: float = 0.0
 
     # --- traitement couleur ---
     gamma:            float = 2.2   # correction gamma WS2812
     smoothing:        float = 0.1  # 0 = aucun, 0.5 = fort
-    saturation_boost: float = 0.3   # 1.0 = aucun boost
+    saturation_boost: float = 2.2   # 1.0 = aucun boost
     # Rotation globale de teinte, en degres (-180..+180). Compense un color
     # cast en amont (decodage YUV→RGB Rec.601 vs Rec.709, lampes ambiantes).
     # Exemples :

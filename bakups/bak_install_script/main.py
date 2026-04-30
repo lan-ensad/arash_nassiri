@@ -265,18 +265,10 @@ def main() -> None:
             print("Controles : [Ctrl+C] dans ce terminal pour arreter")
         else:
             print("Controles : [q] ou [Echap] dans la fenetre video, ou [Ctrl+C] dans ce terminal")
-        
-        # --- Diag range ---
-        # range_log_counter = 0
-
         while True:
             t0 = time.perf_counter()
 
             ok, frame = cap.read()
-            # range_log_counter += 1
-            # if range_log_counter % 60 == 0:
-            #     print(f"frame range: min={frame.min()} max={frame.max()} mean={frame.mean():.1f}")
-
             if not ok:
                 if live:
                     # Source live : retry apres une courte pause (camera temporairement

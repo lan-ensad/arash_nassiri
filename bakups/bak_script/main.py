@@ -14,9 +14,6 @@ from terminal_preview import TerminalPreview
 from list_displays import parse_listmonitors
 
 
-_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
-
-
 def _is_live_source(source) -> bool:
     """True si la source est un flux live (camera, URL reseau)."""
     if isinstance(source, int):
@@ -27,42 +24,6 @@ def _is_live_source(source) -> bool:
             or source.startswith("/dev/video")
         )
     return False
-
-
-def _is_image_source(source) -> bool:
-    """True si la source est un fichier image statique."""
-    return isinstance(source, str) and source.lower().endswith(_IMAGE_EXTS)
-
-
-class _StaticImageSource:
-    """
-    Adapter qui mime l'API cv2.VideoCapture pour une image PNG/JPG statique.
-    read() retourne toujours la meme frame (copie defensive : draw_zones
-    modifie la frame en place, sinon les overlays s'accumulent).
-    """
-    def __init__(self, path: str):
-        img = cv2.imread(path)
-        if img is None:
-            raise RuntimeError(f"Impossible de lire l'image : {path}")
-        self._frame = img
-
-    def read(self):
-        return True, self._frame.copy()
-
-    def get(self, prop):
-        if prop == cv2.CAP_PROP_FRAME_WIDTH:  return float(self._frame.shape[1])
-        if prop == cv2.CAP_PROP_FRAME_HEIGHT: return float(self._frame.shape[0])
-        if prop == cv2.CAP_PROP_FPS:          return 0.0
-        return 0.0
-
-    def set(self, prop, value):
-        return True
-
-    def release(self):
-        pass
-
-    def isOpened(self):
-        return True
 
 
 def _list_video_devices() -> list[str]:
@@ -90,34 +51,6 @@ def _get_monitor(index: int) -> dict | None:
     return None
 
 
-def _compute_crop(src_w: int, src_h: int, target_aspect: float | None) -> tuple[int, int, int, int]:
-    """
-    Calcule un crop centre pour que la zone retenue ait l'aspect ratio cible
-    (largeur/hauteur). Retourne (x0, y0, x1, y1) en coordonnees pixel sur la
-    frame source. target_aspect=None → pas de crop (renvoie l'image entiere).
-
-    - target_aspect < ratio natif : la source est trop large → bandes laterales coupees.
-    - target_aspect > ratio natif : la source est trop haute → bandes haut/bas coupees.
-    """
-    if target_aspect is None:
-        return 0, 0, src_w, src_h
-
-    src_aspect = src_w / src_h
-    if abs(src_aspect - target_aspect) < 1e-3:
-        return 0, 0, src_w, src_h
-
-    if src_aspect > target_aspect:
-        # source trop large → reduire la largeur
-        out_w = int(round(src_h * target_aspect))
-        x0    = (src_w - out_w) // 2
-        return x0, 0, x0 + out_w, src_h
-    else:
-        # source trop haute → reduire la hauteur
-        out_h = int(round(src_w / target_aspect))
-        y0    = (src_h - out_h) // 2
-        return 0, y0, src_w, y0 + out_h
-
-
 def _open_source() -> tuple[cv2.VideoCapture, object, bool]:
     """Ouvre la source (camera ou fichier) et retourne (cap, source, is_live)."""
     if CFG.camera_index is not None:
@@ -140,10 +73,7 @@ def _open_source() -> tuple[cv2.VideoCapture, object, bool]:
             cap.set(cv2.CAP_PROP_FPS, CFG.camera_fps)
     else:
         source = CFG.video_path
-        if _is_image_source(source):
-            cap = _StaticImageSource(source)
-        else:
-            cap = cv2.VideoCapture(source)
+        cap    = cv2.VideoCapture(source)
 
     if not cap.isOpened():
         raise RuntimeError(f"Impossible d'ouvrir la source : {source}")
@@ -155,14 +85,9 @@ def main() -> None:
 
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     fps        = CFG.target_fps if CFG.target_fps else native_fps
-    src_w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    src_h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w          = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h          = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     delay      = 1.0 / fps
-
-    # Crop centre selon l'aspect ratio cible (None = aspect natif).
-    crop_x0, crop_y0, crop_x1, crop_y1 = _compute_crop(src_w, src_h, CFG.target_aspect)
-    w = crop_x1 - crop_x0
-    h = crop_y1 - crop_y0
 
     total_leds  = (
         CFG.leds_top + CFG.leds_right + CFG.leds_bottom + CFG.leds_left
@@ -174,10 +99,7 @@ def main() -> None:
     src_desc = f"camera index {source}" if isinstance(source, int) else str(source)
     kind     = "live" if live else "fichier"
     print(f"Source  : [{kind}] {src_desc}")
-    print(f"Video   : {src_w}x{src_h} @ {native_fps:.2f}fps natif → cible {fps:.2f}fps")
-    if CFG.target_aspect is not None and (w, h) != (src_w, src_h):
-        print(f"Crop    : {w}x{h} (aspect cible {CFG.target_aspect:.4f}, "
-              f"offset x={crop_x0} y={crop_y0})")
+    print(f"Video   : {w}x{h} @ {native_fps:.2f}fps natif → cible {fps:.2f}fps")
     print(f"LEDs    : {total_leds} total (bas {CFG.leds_bottom} / droite {CFG.leds_right} / gauche {CFG.leds_left})")
     print(f"Chaines : A (gauche) = {chain_a} LEDs, B (droite) = {chain_b} LEDs")
 
@@ -238,45 +160,20 @@ def main() -> None:
     first_frame   = True
     just_rewound  = False
 
-    # Compteur FPS : log uniquement sur transition (chute / retablissement) pour
-    # ne pas polluer le log en regime nominal. Baseline = max FPS observe (auto-
-    # calibre, evite de coder en dur target_fps qui n'est pas toujours respecte
-    # par la camera).
-    fps_count             = 0
-    fps_t0                = time.perf_counter()
-    fps_log_dt            = 1.0    # fenetre de mesure
-    fps_baseline          = 0.0    # max FPS observe depuis le demarrage
-    fps_drop_threshold    = 0.80   # alerte si fps < 80% du baseline
-    fps_low_state         = False  # True = on est actuellement en chute
-
-    # --- Decimation source live ---
-    # Si la camera debite plus vite que target_fps (ex : Cam Link a 60fps qui
-    # ignore cap.set(FPS, 30)), on consomme toutes les frames pour vider le
-    # buffer V4L2, mais on n'en traite qu'une sur N.
-    skip_ratio = 1
-    if live and CFG.target_fps and native_fps > CFG.target_fps * 1.2:
-        skip_ratio = max(1, round(native_fps / CFG.target_fps))
-        print(f"Decimation : capture {native_fps:.1f}fps → traite 1/{skip_ratio} "
-              f"(soit ≈ {native_fps/skip_ratio:.1f}fps)")
-    skip_counter = 0
+    # Compteur FPS independant du terminal_preview (utile quand preview off)
+    fps_count   = 0
+    fps_t0      = time.perf_counter()
+    fps_log_dt  = 1.0  # intervalle de log en secondes
 
     try:
         if CFG.headless:
             print("Controles : [Ctrl+C] dans ce terminal pour arreter")
         else:
             print("Controles : [q] ou [Echap] dans la fenetre video, ou [Ctrl+C] dans ce terminal")
-        
-        # --- Diag range ---
-        # range_log_counter = 0
-
         while True:
             t0 = time.perf_counter()
 
             ok, frame = cap.read()
-            # range_log_counter += 1
-            # if range_log_counter % 60 == 0:
-            #     print(f"frame range: min={frame.min()} max={frame.max()} mean={frame.mean():.1f}")
-
             if not ok:
                 if live:
                     # Source live : retry apres une courte pause (camera temporairement
@@ -289,18 +186,6 @@ def main() -> None:
                     just_rewound = True
                     continue
                 break
-
-            # Decimation : si camera plus rapide que target_fps, on consomme
-            # toutes les frames mais on n'en traite qu'une sur skip_ratio.
-            if skip_ratio > 1:
-                skip_counter += 1
-                if skip_counter % skip_ratio != 0:
-                    continue
-
-            # Crop centre sur l'aspect ratio cible. No-op si target_aspect=None
-            # ou si la source a deja le bon ratio.
-            if (crop_x0, crop_y0) != (0, 0) or (crop_x1, crop_y1) != (src_w, src_h):
-                frame = frame[crop_y0:crop_y1, crop_x0:crop_x1]
 
             raw     = extract_colors(frame, zones)
             colors  = process(raw, prev)
@@ -328,30 +213,14 @@ def main() -> None:
                 if key == ord("q") or key == 27:  # q ou Echap
                     break
 
-            # FPS : log uniquement sur transition (chute > 20% sous le baseline,
-            # ou retablissement). Pas de log en regime nominal -> log lisible.
-            # Skip si le preview terminal est actif (il affiche deja son propre FPS).
+            # Log FPS 1x/s (seulement si le preview terminal est desactive,
+            # sinon le preview affiche deja son propre FPS)
             if preview is None:
                 fps_count += 1
                 now = time.perf_counter()
                 if now - fps_t0 >= fps_log_dt:
                     fps_measured = fps_count / (now - fps_t0)
-                    if fps_measured > fps_baseline:
-                        fps_baseline = fps_measured
-                    is_low = (
-                        fps_baseline > 0
-                        and fps_measured < fps_baseline * fps_drop_threshold
-                    )
-                    if is_low and not fps_low_state:
-                        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-                        print(f"[{ts}] FPS chute : {fps_measured:5.1f} "
-                              f"(baseline {fps_baseline:5.1f})")
-                        fps_low_state = True
-                    elif not is_low and fps_low_state:
-                        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-                        print(f"[{ts}] FPS retabli : {fps_measured:5.1f} "
-                              f"(baseline {fps_baseline:5.1f})")
-                        fps_low_state = False
+                    print(f"FPS : {fps_measured:5.1f}")
                     fps_count = 0
                     fps_t0    = now
 
