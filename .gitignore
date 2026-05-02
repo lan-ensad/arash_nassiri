@@ -5,6 +5,7 @@ Firmware/src/wifi_config.h
 # --- Contenu sous copyright ---
 script/data/
 backups/
+bak_script/
 
 # --- Videos de test (lourdes, hors versionnement) ---
 test_videos/
