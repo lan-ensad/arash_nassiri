@@ -22,20 +22,30 @@ class Config:
     target_aspect: float | None = None
 
     # --- lecture ---
-    target_fps: float = 30.0   # fps cible (utilise pour throttle la lecture fichier)
-    loop:       bool  = False  # relire le fichier en boucle (ignore pour source live)
-    fullscreen: bool  = False  # fenetre plein ecran sans overlay (mode prod)
-    headless:   bool  = False  # True = pas de fenetre OpenCV (gain perf, affichage externe)
-
-    # --- ecran de sortie ---
-    # Index de l'ecran (cf. `python3 script/list_displays.py`). None = WM par defaut.
-    monitor_index: int | None = None
+    loop: bool = False  # build_partition force False (lecture sequentielle unique)
 
     # --- reseau (ESP32 en WiFi sur un reseau ferme) ---
     # Doit correspondre a LOCAL_IP_BYTES dans Firmware/src/wifi_config.h
     esp32_ip:   str  = "192.168.8.50"   # IP statique de l'ESP32
     esp32_port: int  = 4210             # port UDP d'ecoute sur l'ESP32
     dry_run:    bool = False             # True = pas d'envoi UDP (test sans ESP32)
+
+    # --- partition pre-calculee ---
+    # Sidecar .npz produit par build_partition.py. Charge au demarrage de
+    # main.py. Indexe par timecode recu via OSC depuis Reaper.
+    partition_path: str = "../test_videos/abl.npz"
+
+    # --- serveur OSC (reception timecode Reaper) ---
+    # Bind sur osc_host:osc_port. 0.0.0.0 = ecoute sur toutes les interfaces
+    # (Reaper peut etre sur la meme machine ou sur le reseau local).
+    # Cote Reaper : Preferences > Control/OSC/Web > Add OSC > Mode "Configure
+    # device IP+port" avec l'IP de cette machine et osc_port. Activer le
+    # feedback /time (raw float, secondes depuis le debut du projet).
+    osc_host: str = "0.0.0.0"
+    osc_port: int = 9000
+    # Adresse OSC du timecode (defaut Reaper : "/time" en raw float).
+    # Alternatives selon config Reaper : "/beat", "/samples", "/frames".
+    osc_time_address: str = "/time"
 
     # --- preview terminal (dev) ---
     terminal_preview:     bool  = True  # afficher les chaines en ANSI truecolor dans le terminal

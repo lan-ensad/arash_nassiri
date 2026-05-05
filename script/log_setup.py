@@ -1,6 +1,5 @@
 """
-Configuration logging globale. Logger sur stderr pour ne pas interferer
-avec terminal_preview (qui ecrit des sequences ANSI sur stdout en place).
+Configuration logging globale (stderr).
 
 Usage : appeler `setup_logging()` une fois au demarrage de main(). Les
 modules utilisent ensuite `logger = logging.getLogger(__name__)`.

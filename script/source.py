@@ -1,7 +1,6 @@
 """
 Ouverture et selection de la source video (camera ou fichier/image/URL).
-Inclut le calcul du crop centre selon aspect ratio cible et la decimation
-des sources live trop rapides.
+Inclut le calcul du crop centre selon aspect ratio cible.
 """
 
 import logging
@@ -121,10 +120,3 @@ def compute_crop(src_w: int, src_h: int,
     out_h = int(round(src_w / target_aspect))
     y0    = (src_h - out_h) // 2
     return 0, y0, src_w, y0 + out_h
-
-
-def compute_skip_ratio(live: bool, native_fps: float, target_fps: float) -> int:
-    """Decimation source live : si camera > target_fps * 1.2, traite 1/N frames."""
-    if not live or not target_fps or native_fps <= target_fps * 1.2:
-        return 1
-    return max(1, round(native_fps / target_fps))
