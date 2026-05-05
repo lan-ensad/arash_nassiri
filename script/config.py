@@ -6,7 +6,7 @@ class Config:
     # Priorite : si camera_index est defini, utilise ce flux camera (webcam, carte
     # de capture HDMI-USB, etc.). Sinon, lit video_path (fichier local, /dev/videoN,
     # URL rtsp://, http://, etc. que OpenCV/FFmpeg peut ouvrir).
-    video_path:   str         = "../test_videos/ambilight_test.mp4"
+    video_path:   str         = "../test_videos/abl.mp4"
     camera_index: int | None  = None   # ex : 0 pour la 1re webcam. None = utilise video_path
 
     # --- resolution / fps camera (ignore si source = fichier) ---
@@ -80,16 +80,20 @@ class Config:
     zone_size:     int  = 150    # cote du carre full_coverage, en pixels
 
     # --- mode chain_squares (par defaut quand low_res et full_coverage sont False) ---
-    # Chaque LED = 1 carre de cote chain_zone_size, place sur le perimetre.
-    # Origine = centre du bord bas. Chaine A part vers la gauche, longe le
-    # cote gauche, finit sur le haut (vers le centre). Chaine B en miroir.
-    # Pas entre LEDs voisines = chain_zone_size (carres jointifs).
-    chain_zone_size: int = 6
+    # Chaque LED = 1 carre de cote chain_zone_size, place sur un chemin en
+    # serpentin. Origine = centre du bord bas. Chaine A part vers la gauche,
+    # longe le cote gauche, atteint le centre haut. Si le nombre de LEDs
+    # depasse ce premier passage, le chemin redescend vers le centre bas en
+    # repassant par le cote, decale de chain_zone_size vers l'interieur ; les
+    # passages suivants alternent ainsi en s'enfoncant dans l'image. Chaine B
+    # en miroir cote droit. Pas entre LEDs voisines = chain_zone_size (carres
+    # jointifs le long du chemin).
+    chain_zone_size: int = 11
     # Decalage de l'index 0 le long du chemin (en nombre de LEDs). Permet
     # d'ignorer N LEDs en debut de chaine si elles ne sont pas physiquement
     # visibles : chain_shift=5 -> l'index 0 demarre a la position 5 du chemin,
     # la fin progresse d'autant vers le haut centre.
-    chain_shift: int = 10
+    chain_shift: int = 5
 
     # --- mode low_res ---
     # True = 2 zones uniquement (1 par chaine). Chaque zone produit 1 couleur

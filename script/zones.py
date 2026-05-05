@@ -50,14 +50,18 @@ def build_zones(h: int, w: int) -> list[Zone]:
 
 def _build_zones_chain_squares(h: int, w: int) -> list[Zone]:
     """
-    Chaine de carres jointifs sur le perimetre. Chaque LED = 1 carre de
-    cote chain_zone_size centre sur un point du chemin.
+    Chaine de carres jointifs en serpentin. Chaque LED = 1 carre de cote
+    chain_zone_size centre sur un point du chemin.
 
     Chemin (chaine A) : centre_bas -> coin bas-gauche -> coin haut-gauche
-    -> centre_haut. Chaine B en miroir (vers la droite).
+    -> centre_haut. Si le nombre de LEDs depasse ce premier passage, le
+    chemin redescend vers le centre_bas en repassant par le cote, decale
+    de chain_zone_size vers l'interieur. Les passages alternent ensuite
+    montee/descente, en s'enfoncant de zs a chaque demi-tour, jusqu'a
+    saturation de l'image. Chaine B en miroir (cote droit).
 
-    Si le chemin requis ((chain_shift + n_leds) * zs) depasse le perimetre,
-    les LEDs en exces sont clippees au centre haut (et un warning est emis).
+    Si le serpentin lui-meme est sature (image trop petite pour le nombre
+    de LEDs), les LEDs en exces sont clippees a la fin du chemin (warning).
     Les carres sont clippes aux bords de l'image dans les coins.
     """
     zs    = config.CFG.chain_zone_size
@@ -65,33 +69,10 @@ def _build_zones_chain_squares(h: int, w: int) -> list[Zone]:
     half  = zs // 2
     cx    = w // 2
 
-    # Longueurs des 3 segments du chemin (centre -> coin -> coin -> centre).
-    seg_bottom = cx - half          # demi-bas
-    seg_side   = h - 2 * half       # cote (bas -> haut)
-    seg_top    = cx - half          # demi-haut
-    total      = seg_bottom + seg_side + seg_top
-
-    def a_pos(s: float) -> tuple[int, int]:
-        """Centre du carre a l'arc-length s sur le chemin chaine A (gauche)."""
-        s = min(max(s, 0), total)
-        if s <= seg_bottom:
-            return (cx - round(s), h - half)
-        s -= seg_bottom
-        if s <= seg_side:
-            return (half, (h - half) - round(s))
-        s -= seg_side
-        return (half + round(s), half)
-
-    def b_pos(s: float) -> tuple[int, int]:
-        """Mirror : chemin chaine B (droite)."""
-        s = min(max(s, 0), total)
-        if s <= seg_bottom:
-            return (cx + round(s), h - half)
-        s -= seg_bottom
-        if s <= seg_side:
-            return (w - half, (h - half) - round(s))
-        s -= seg_side
-        return ((w - half) - round(s), half)
+    polyline_a = _chain_polyline(h, w, zs, half, cx, side="left")
+    polyline_b = _chain_polyline(h, w, zs, half, cx, side="right")
+    total_a = _polyline_length(polyline_a)
+    total_b = _polyline_length(polyline_b)
 
     def square_at(cx_p: int, cy_p: int) -> Zone:
         return (
@@ -104,25 +85,102 @@ def _build_zones_chain_squares(h: int, w: int) -> list[Zone]:
     # Verification du debordement (warning, pas erreur : clippage doux ensuite).
     needed_a = (shift + config.CFG.chain_a_len - 1) * zs
     needed_b = (shift + config.CFG.chain_b_len - 1) * zs
-    if needed_a > total or needed_b > total:
-        excess = max(needed_a, needed_b) - total
+    if needed_a > total_a or needed_b > total_b:
+        excess = max(needed_a - total_a, needed_b - total_b)
         log.warning(
-            "chain_squares : chemin %dpx insuffisant pour %d LEDs + shift %d "
+            "chain_squares : serpentin %dpx insuffisant pour %d LEDs + shift %d "
             "@ chain_zone_size=%d (deborde de %dpx, LEDs en exces clippees "
-            "au centre haut). Reduire chain_zone_size, chain_shift, ou agrandir l'image.",
-            total, max(config.CFG.chain_a_len, config.CFG.chain_b_len),
+            "a la fin du chemin). Reduire chain_zone_size, chain_shift, ou "
+            "agrandir l'image.",
+            min(total_a, total_b), max(config.CFG.chain_a_len, config.CFG.chain_b_len),
             shift, zs, excess,
         )
 
     zones: list[Zone] = []
     for i in range(config.CFG.chain_a_len):
         s = (shift + i) * zs
-        zones.append(square_at(*a_pos(s)))
+        zones.append(square_at(*_walk_polyline(polyline_a, s)))
     for i in range(config.CFG.chain_b_len):
         s = (shift + i) * zs
-        zones.append(square_at(*b_pos(s)))
+        zones.append(square_at(*_walk_polyline(polyline_b, s)))
 
     return zones
+
+
+def _chain_polyline(
+    h: int, w: int, zs: int, half: int, cx: int, side: str,
+) -> list[tuple[int, int]]:
+    """
+    Polyligne du serpentin chaine A (side='left') ou chaine B (side='right').
+
+    Demarre au centre bas, longe le cote, atteint le centre haut. Si l'image
+    le permet, repart vers le centre bas par le meme cote inset de zs, et
+    ainsi de suite jusqu'a saturation (corner se rapproche du centre ou
+    fenetre verticale fermee).
+    """
+    pts: list[tuple[int, int]] = [(cx, h - half)]
+    loop = 0
+    while True:
+        inset = loop * zs
+        if side == "left":
+            x_corner = half + inset
+            inside_x = x_corner < cx
+        else:
+            x_corner = w - half - inset
+            inside_x = x_corner > cx
+        y_top = half + inset
+        y_bot = h - half - inset
+        if not inside_x or y_top >= y_bot:
+            break
+
+        if loop % 2 == 0:
+            # Aller : centre_bas -> coin bas -> coin haut -> centre_haut.
+            pts.append((x_corner, y_bot))
+            pts.append((x_corner, y_top))
+            pts.append((cx, y_top))
+            next_y = y_top + zs
+            if next_y >= y_bot:
+                break
+            pts.append((cx, next_y))   # transition vers la couche inset suivante
+        else:
+            # Retour : centre_haut -> coin haut -> coin bas -> centre_bas.
+            pts.append((x_corner, y_top))
+            pts.append((x_corner, y_bot))
+            pts.append((cx, y_bot))
+            next_y = y_bot - zs
+            if next_y <= y_top:
+                break
+            pts.append((cx, next_y))
+        loop += 1
+    return pts
+
+
+def _polyline_length(pts: list[tuple[int, int]]) -> int:
+    total = 0
+    for i in range(len(pts) - 1):
+        x0, y0 = pts[i]
+        x1, y1 = pts[i + 1]
+        total += abs(x1 - x0) + abs(y1 - y0)  # segments axis-aligned
+    return total
+
+
+def _walk_polyline(pts: list[tuple[int, int]], s: float) -> tuple[int, int]:
+    """Position sur la polyligne a l'arc-length s. Clippe aux extremites."""
+    if not pts:
+        return (0, 0)
+    s = max(0.0, s)
+    cum = 0.0
+    for i in range(len(pts) - 1):
+        x0, y0 = pts[i]
+        x1, y1 = pts[i + 1]
+        seg_len = abs(x1 - x0) + abs(y1 - y0)
+        if seg_len <= 0:
+            continue
+        if s <= cum + seg_len:
+            t = (s - cum) / seg_len
+            return (round(x0 + (x1 - x0) * t), round(y0 + (y1 - y0) * t))
+        cum += seg_len
+    return pts[-1]
 
 
 def _build_zones_low_res(h: int, w: int) -> list[Zone]:
